@@ -6,7 +6,7 @@ from aqt.qt import *
 from .utils import (
     output_card, log, split_components, is_learned, mark_learned_radicals,
     mark_allowed_to_learn_kanji, mark_learned_kanji, mark_allowed_to_learn_vocabulary,
-    set_flags
+    set_flags, mark_daily_cards
 )
 
 
@@ -20,7 +20,7 @@ logging.basicConfig(filename=os.path.join(os.path.dirname(__file__), "log"),
 
 
 log("START %s START", "*"*50)
-wanikani_col = mw.col.find_cards('"deck:Wanikani Ultimate 2: Electric Boogaloo"')
+# wanikani_col = mw.col.find_cards('"deck:Wanikani Ultimate 2: Electric Boogaloo"')
 # cardCount = len(mw.col.find_cards('"deck:Wanikani Ultimate 2: Electric Boogaloo"'))
 # learned = 0
 # unknown = 0
@@ -50,34 +50,37 @@ try:
     #         is_learned(mw.col.backend, card_id)
     #     )
 
-    card_id = wanikani_col[23]
-    notes = mw.col.find_notes('"deck:Wanikani Ultimate 2: Electric Boogaloo" tag:Radical')
-    log("notes count: %s", len(notes))
-    note_id = notes[0]
-    mw.col.getNote(note_id)
-    card = mw.col.getCard(card_id)
+    # card_id = wanikani_col[23]
+    # notes = mw.col.find_notes('"deck:Wanikani Ultimate 2: Electric Boogaloo" tag:Radical')
+    # log("notes count: %s", len(notes))
+    # note_id = notes[0]
+    # mw.col.getNote(note_id)
+    # card = mw.col.getCard(card_id)
     card_stats = mw.col.backend.card_stats(5151)
-    output_card(card)
-    log("reps: %s lapses: %s due: %s", card.reps, card.lapses, card.due)
+    #output_card(card)
+    # log("reps: %s lapses: %s due: %s", card.reps, card.lapses, card.due)
     #log("card.__dict__=%s",card.__dict__ )
-    #log("card_stats=%s", [i for i in card_stats.revlog])
-    revlog_item = card_stats.revlog[9]
+    log("card_stats=%s", [i for i in card_stats.revlog])
+    import datetime
+    # revlog_item = card_stats.revlog[9]
     #log("revlog %s", card_stats.revlog)
     #log("revlog %s", revlog_item.review_kind)
     #log("revlog dir %s", dir(revlog_item))
     #log("revlog.review_kind %s", revlog_item.review_kind)
-    log("is_learned = %s", is_learned(mw.col.backend, card_id))
+    # log("is_learned = %s", is_learned(mw.col.backend, card_id))
 
-    mark_learned_radicals(mw)
-    mark_allowed_to_learn_kanji(mw)
-    mark_learned_kanji(mw)
-    mark_allowed_to_learn_vocabulary(mw)
+    # mark_learned_radicals(mw)
+    # mark_allowed_to_learn_kanji(mw)
+    # mark_learned_kanji(mw)
+    #mark_allowed_to_learn_vocabulary(mw)
+    mark_daily_cards(mw)
+
     # set_flags(mw)
 
-    log("flags %s", card.flags)
+    # log("flags %s", card.flags)
 
-    note = mw.col.getNote(27)
-    card.note()
+    # note = mw.col.getNote(27)
+    # card.note()
     # log("%s", dir(note.cards()[0]))
     # log("%s", note.cards()[0].template()['name'])
     # log("%s", note.cards()[1].template()['name'])
@@ -103,11 +106,6 @@ try:
 
     #     except Exception as ex:
     #         log("Exception on note %s %s", note_id, ex)
-
-
-
-
-
 
 
 except Exception as ex:

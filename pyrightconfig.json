@@ -1,0 +1,11 @@
+{
+    "venvPath": ".tox",
+    "venv": "py311",
+    "reportMissingTypeStubs": false,
+    "reportGeneralTypeIssues": false,
+    "include": ["groups"],
+    "extraPaths": [
+        "./",
+        ".tox/mypy/lib/python/site-packages",
+    ]
+}

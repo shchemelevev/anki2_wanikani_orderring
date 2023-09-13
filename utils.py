@@ -1,4 +1,5 @@
 import os
+import datetime
 from aqt import mw
 from anki.consts import QUEUE_TYPE_LRN, QUEUE_TYPE_REV, QUEUE_TYPE_NEW
 from anki.cards import Card
@@ -65,6 +66,29 @@ def is_learned(backend, card_id):
     # TODO: add interval check
     # TODO: possibly add ease check
     return True
+
+
+def is_daily_card(backend, card_id):
+    #check that the card is not new or learning
+    card_stats = backend.card_stats(card_id)
+    first_review = card_stats.first_review
+    if first_review == 0:
+        return True
+
+    last_reviews = card_stats.revlog
+    count = 0
+    for review in last_reviews:
+        # learning doesn't count, review_kind for all learning responses are 0
+        if review.review_kind:
+            count += 1
+    if count < 3:
+        return True
+
+    now = datetime.datetime.now()
+    first_review_date = datetime.datetime.fromtimestamp(first_review)
+    td = now - first_review_date
+    return td.days < 45
+
 
 def mark_learned_radicals(mw):
     notes = mw.col.find_notes('"deck:Wanikani Ultimate 2: Electric Boogaloo" tag:Radical')
@@ -157,6 +181,32 @@ def mark_learned_kanji(mw):
                     note.delTag(ltag_name)
                     note.flush()
     log("Kanji learned: %s", learned)
+
+
+def mark_daily_cards(mw):
+    notes = mw.col.find_notes('"deck:Wanikani Ultimate 2: Electric Boogaloo" is:due')
+    log("Number of items: %s", len(notes))
+    daily_count = 0
+    ltag_name = "WANIKANI_DAILY"
+    for note_id in notes:
+        note = mw.col.getNote(note_id)
+        for card in note.cards():
+            # output_card(card)
+            card_id = card.id
+            # card_stats = mw.col.backend.card_stats(card_id)
+            # log("revlog.review=%s", card_stats.first_review)
+            # log("card_stats=%s", [i for i in card_stats.revlog])
+            if is_daily_card(mw.col.backend, card_id):
+                daily_count += 1
+                if ltag_name not in note.tags:
+                    note.addTag(ltag_name)
+                    note.flush()
+            else:
+                if ltag_name in note.tags:
+                    note.delTag(ltag_name)
+                    note.flush()
+
+    log("Daily cards: %s", daily_count)
 
 
 def mark_allowed_to_learn_vocabulary(mw):
