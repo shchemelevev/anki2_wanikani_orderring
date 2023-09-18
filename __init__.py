@@ -11,7 +11,7 @@ from aqt.reviewer import Reviewer
 from .utils import (
     mark_learned_radicals,
     mark_allowed_to_learn_kanji, mark_learned_kanji, mark_allowed_to_learn_vocabulary,
-    split_components
+    split_components, mark_daily_cards
 )
 
 from aqt import mw
@@ -20,6 +20,10 @@ from aqt.deckbrowser import DeckBrowser
 from aqt import AnkiQt, gui_hooks
 
 from .utils import log
+
+
+# To run the code in code.py do:
+# $ touch run && tail -f log
 
 def handler():
     if os.path.exists(os.path.join(os.path.dirname(__file__), "run")):
@@ -116,9 +120,11 @@ def onAnswer(reviewer, card: Card, ease):
                     if kanji in due_components and due_c_types[kanji] == CARD_TYPE_VOCAB and due_card.flags == 1:
                         suspend_with_log(card, due_card, due_components)
 
-        # if ease == BUTTON_ONE:
-        #     pass
-        # else:
+        # if ease != BUTTON_ONE:
+        #     if card.did == int(mw.col.decks.id_for_name('WK_daily')):
+        #         wk_did = int(mw.col.decks.id_for_name('Wanikani Ultimate 2: Electric Boogaloo'))
+        #         card.did = wk_did
+        #         card.flush()
 
 
 gui_hooks.reviewer_did_answer_card.append(onAnswer)
@@ -131,6 +137,7 @@ def _handleFilteredDeckButtons(self, url):
         mark_learned_kanji(mw)
         allowed_to_learn_vocab = mark_allowed_to_learn_vocabulary(mw)
         card_id_list = [c_id for c_id in mw.col.find_cards('''"deck:Wanikani Ultimate 2: Electric Boogaloo" is:suspended''')]
+        mark_daily_cards(mw)
         mw.col.sched.unsuspendCards(card_id_list)
         mw.col.flush()
         mw.reset()

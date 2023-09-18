@@ -9,6 +9,7 @@ from .utils import (
     set_flags, mark_daily_cards
 )
 
+import anki.decks
 
 logging.basicConfig(filename=os.path.join(os.path.dirname(__file__), "log"),
                     filemode='a',
@@ -55,13 +56,23 @@ try:
     # log("notes count: %s", len(notes))
     # note_id = notes[0]
     # mw.col.getNote(note_id)
-    # card = mw.col.getCard(card_id)
-    card_stats = mw.col.backend.card_stats(5151)
-    #output_card(card)
+
+    card = mw.col.getCard(5639)
+    # card_stats = mw.col.backend.card_stats(5196)
+    card.did = int(mw.col.decks.id_for_name('WK_daily'))
+    card.flush()
+    log("card_did=%s", card.did)
+
+    mw.col.flush()
+    mw.reset()
+    mw.col.flush()
+    # output_card(card)
+    # log("card_stats%s", card_stats)
     # log("reps: %s lapses: %s due: %s", card.reps, card.lapses, card.due)
     #log("card.__dict__=%s",card.__dict__ )
-    log("card_stats=%s", [i for i in card_stats.revlog])
+    # log("card_stats=%s", [i for i in card_stats.revlog])
     import datetime
+    log('wk_daily_id=%s', mw.col.decks.id_for_name('WK_daily'))
     # revlog_item = card_stats.revlog[9]
     #log("revlog %s", card_stats.revlog)
     #log("revlog %s", revlog_item.review_kind)
@@ -73,7 +84,7 @@ try:
     # mark_allowed_to_learn_kanji(mw)
     # mark_learned_kanji(mw)
     #mark_allowed_to_learn_vocabulary(mw)
-    mark_daily_cards(mw)
+    # mark_daily_cards(mw)
 
     # set_flags(mw)
 
