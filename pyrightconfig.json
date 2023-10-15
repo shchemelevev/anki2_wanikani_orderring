@@ -5,7 +5,7 @@
     "reportGeneralTypeIssues": false,
     "include": ["groups"],
     "extraPaths": [
+        "/Users/e_shchemelev/.virtualenvs/venv/lib/python3.10/site-packages" ,
         "./",
-        ".tox/mypy/lib/python/site-packages",
     ]
 }

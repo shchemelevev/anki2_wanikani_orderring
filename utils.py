@@ -1,9 +1,14 @@
+from functools import total_ordering
 import os
 import datetime
 from aqt import mw
+from aqt.main import AnkiQt  # isort:skip
 from anki.consts import QUEUE_TYPE_LRN, QUEUE_TYPE_REV, QUEUE_TYPE_NEW
 from anki.cards import Card
+from werkzeug.wrappers.request import get_input_stream
 
+KANJI_MEANING_ALLOW = "kanji_meaning_allow"
+KANJI_READING_ALLOW = "kanji_reading_allow"
 KANJI_READING_LEARNED = 'kanji_reading_learned'
 KANJI_MEANING_LEARNED = 'kanji_meaning_learned'
 VOCAB_READING_ALLOW = 'vocab_reading_allow'
@@ -44,11 +49,11 @@ def output_card(card):
         component_types,
         )
 
-def is_learned(backend, card_id):
+def is_learned(backend, card_id, lookback_overwrite=4):
     #check that the card is not new or learning
     # card = mw.col.getCard(card_id)
     card_stats = backend.card_stats(card_id)
-    LOOKBACK = 4
+    LOOKBACK = lookback_overwrite
     last_reviews = card_stats.revlog[:LOOKBACK]
     # new card
     if len(last_reviews) == 0:
@@ -100,7 +105,7 @@ def mark_learned_radicals(mw):
     for note_id in notes:
         note = mw.col.getNote(note_id)
         card_id = note.cards()[0].id
-        if is_learned(mw.col.backend, card_id):
+        if is_learned(mw.col.backend, card_id, lookback_overwrite=2):
             #log('learned %s', note.fields[0])
             if 'radical_learned' not in note.tags:
                 note.addTag('radical_learned')
@@ -110,59 +115,69 @@ def mark_learned_radicals(mw):
                 note.delTag('radical_learned')
                 note.flush()
 
+def _get_notes_and_items(mw, query: str):
+    all_items = []
+    notes = mw.col.find_notes('''"deck:Wanikani Ultimate 2: Electric Boogaloo" %s ''' % query)
+    for note_id in notes:
+        note = mw.col.getNote(note_id)
+        all_items.append(note.fields[0])
+    return notes, all_items
+
 
 def mark_allowed_to_learn_kanji(mw):
+    # Kanji component can contain not only radicals but also other kanji
+    # We need to learn kanji meaning first and then we learn reading
+    _, only_radicals = _get_notes_and_items(mw, "tag:Radical")
     all_radicals = []
-    notes = mw.col.find_notes('''"deck:Wanikani Ultimate 2: Electric Boogaloo" tag:Radical''')
-    for note_id in notes:
-        note = mw.col.getNote(note_id)
-        all_radicals.append(note.fields[0])
-    notes = mw.col.find_notes('''"deck:Wanikani Ultimate 2: Electric Boogaloo" tag:Kanji''')
-    for note_id in notes:
-        note = mw.col.getNote(note_id)
-        all_radicals.append(note.fields[0])
+    all_radicals.extend(only_radicals)
 
-    notes = mw.col.find_notes('''"deck:Wanikani Ultimate 2: Electric Boogaloo" tag:radical_learned''')
-    log("Number of learned radicals: %s", len(notes))
-    learned_radicals = []
-    for note_id in notes:
-        note = mw.col.getNote(note_id)
-        # log("tags: %s", note.tags)
-        learned_radicals.append(note.fields[0])
+    _, only_kanji = _get_notes_and_items(mw, "tag:Kanji")
+    all_radicals.append(only_kanji)
+
+    _, learned_radicals = _get_notes_and_items(mw, "tag:radical_learned")
     log("Number of learned radicals: %s", len(learned_radicals))
+    tag_transform = {
+        KANJI_READING_LEARNED: KANJI_READING_ALLOW,
+        KANJI_MEANING_LEARNED: KANJI_MEANING_ALLOW
+    }
 
-    notes = mw.col.find_notes('''"deck:Wanikani Ultimate 2: Electric Boogaloo" tag:Kanji tag:KANJI_READING_LEARNED''')
-    for note_id in notes:
-        note = mw.col.getNote(note_id)
-        learned_radicals.append(note.fields[0].strip())
-    log("Number of learned components: %s", len(learned_radicals))
+    total_allowed_to_learn = 0
+    for kanji_tag in [KANJI_MEANING_LEARNED, KANJI_READING_LEARNED]:
+        allowed_to_learn = 0
+        _, learned_kanji = _get_notes_and_items(mw, "tag:%s" % kanji_tag)
+        learned_combined = []
+        learned_combined.extend(learned_radicals)
+        learned_combined.extend(learned_kanji)
+        log("Number of learned components: %s", len(learned_combined))
 
-    notes = mw.col.find_notes('''"deck:Wanikani Ultimate 2: Electric Boogaloo" tag:Kanji''')
-    log("Number of kanji: %s", len(notes))
-    allowed_to_learn = 0
-    tag = 'kanji_allowed_to_learn'
-    for note_id in notes:
-        note = mw.col.getNote(note_id)
-        components = split_components(note.fields[2])
-        if ( len([c for c in components if c in learned_radicals]) == len(components)
-            or any([c for c in components if c not in all_radicals])
-        ):
-            allowed_to_learn += 1
-            if tag not in note.tags:
-                note.addTag(tag)
-                note.flush()
-                continue
-            #log("Allowed to %s learn: %s", tag, note.fields[0])
-        else:
-            learned_components = [c for c in components if c in learned_radicals]
-            # if len(learned_components) > 0:
-            #     log("Not allowed %s, comps: %s, learned: %s", note.fields[0], components, learned_components)
-            if tag in note.tags:
-                note.delTag(tag)
-                note.flush()
-                continue
-    log("Allowed to learn kanji(reading+meaning, or x2): %s", allowed_to_learn*2)
-    return allowed_to_learn*2
+        notes, _ = _get_notes_and_items(mw, "tag:Kanji")
+        log("Number of kanji: %s", len(notes))
+        tag = tag_transform[kanji_tag]
+        for note_id in notes:
+            note = mw.col.getNote(note_id)
+            components = split_components(note.fields[2])
+            if any([c for c in components if c not in all_radicals]):
+                log("component not found for %s", components)
+            if ( len([c for c in components if c in learned_radicals]) == len(components)
+                or any([c for c in components if c not in all_radicals])
+            ):
+                allowed_to_learn += 1
+                total_allowed_to_learn += 1
+                if tag not in note.tags:
+                    note.addTag(tag)
+                    note.flush()
+                # for card in note.cards():
+                #log("Allowed to %s learn: %s", tag, note.fields[0])
+            else:
+                #learned_components = [c for c in components if c in learned_radicals]
+                # if len(learned_components) > 0:
+                #     log("Not allowed %s, comps: %s, learned: %s", note.fields[0], components, learned_components)
+                if tag in note.tags:
+                    note.delTag(tag)
+                    note.flush()
+                    continue
+        log("Allowed to learn kanji(%s): %s", tag, allowed_to_learn)
+    return total_allowed_to_learn
 
 
 def mark_learned_kanji(mw):
@@ -254,6 +269,10 @@ def mark_daily_cards(mw):
 
 def mark_allowed_to_learn_vocabulary(mw):
     allowed_to_learn_dict = {}
+    kanji_tag_to_flag = {
+        KANJI_READING_LEARNED: 1,
+        KANJI_MEANING_LEARNED: 2
+    }
     for kanji_tag in [KANJI_MEANING_LEARNED, KANJI_READING_LEARNED]:
         allowed_to_learn = 0
         notes = mw.col.find_notes('''"deck:Wanikani Ultimate 2: Electric Boogaloo" tag:%s''' % kanji_tag)
@@ -264,19 +283,20 @@ def mark_allowed_to_learn_vocabulary(mw):
             # log("tags: %s", note.tags)
             learned_kanji.append(note.fields[0])
 
-        card_id_list = mw.col.find_cards('''"deck:Wanikani Ultimate 2: Electric Boogaloo" tag:Vocabulary''')
+        card_id_list = mw.col.find_cards('''"deck:Wanikani Ultimate 2: Electric Boogaloo" tag:Vocabulary flag:%s''' % kanji_tag_to_flag[kanji_tag])
         log("Number of vocabulary items: %s", len(card_id_list))
         for card_id in card_id_list:
             card = mw.col.getCard(card_id)
             components = split_components(card.note().fields[2])
             note = card.note()
             tag = kanji_tag_to_vocab_tag(kanji_tag)
+
             if all([c in learned_kanji for c in components]):
                 allowed_to_learn += 1
                 if tag not in card.note().tags:
                     note.addTag(tag)
                     note.flush()
-                #log("Allowed to %s learn: %s", kanji_tag, card.note().fields[0])
+                log("Allowed to %s learn: %s flag %s", tag, card.note().fields[0], card.flags)
             else:
                 if tag in note.tags:
                     note.delTag(tag)
